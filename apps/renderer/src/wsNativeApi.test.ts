@@ -299,4 +299,61 @@ describe("wsNativeApi", () => {
 
     await expect(request).resolves.toEqual([]);
   });
+
+  it("dispatches provider events to subscribers and supports unsubscribe", async () => {
+    setWindowSearch("?ws=ws%3A%2F%2F127.0.0.1%3A4409");
+    const { getOrCreateWsNativeApi } = await import("./wsNativeApi");
+    const api = getOrCreateWsNativeApi();
+
+    const received: unknown[] = [];
+    const unsubscribe = api.providers.onEvent((event) => {
+      received.push(event);
+    });
+
+    const request = api.todos.list();
+    const socket = MockWebSocket.instances[0];
+    await waitForCondition(() => (socket?.sentMessages.length ?? 0) > 0);
+    const requestEnvelope = JSON.parse(socket?.sentMessages[0] ?? "{}") as {
+      id: string;
+    };
+    socket?.emitMessage(
+      JSON.stringify({
+        type: "response",
+        id: requestEnvelope.id,
+        ok: true,
+        result: [],
+      }),
+    );
+    await expect(request).resolves.toEqual([]);
+
+    const payload = {
+      id: "evt-1",
+      kind: "notification",
+      provider: "codex",
+      sessionId: "sess-1",
+      createdAt: "2026-02-01T00:00:00.000Z",
+      method: "turn/started",
+    };
+    socket?.emitMessage(
+      JSON.stringify({
+        type: "event",
+        channel: "provider:event",
+        payload,
+      }),
+    );
+    await waitForCondition(() => received.length === 1);
+
+    unsubscribe();
+    socket?.emitMessage(
+      JSON.stringify({
+        type: "event",
+        channel: "provider:event",
+        payload: { ...payload, id: "evt-2" },
+      }),
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, 25);
+    });
+    expect(received).toHaveLength(1);
+  });
 });
