@@ -1,12 +1,18 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["PORT", "VITE_WS_URL", "VITE_DEV_SERVER_URL"],
+  "globalEnv": [
+    "PORT",
+    "VITE_WS_URL",
+    "VITE_DEV_SERVER_URL",
+    "CODETHING_LOG_WS_EVENTS"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
     "dev": {
+      "dependsOn": ["@acme/contracts#build"],
       "cache": false,
       "persistent": true
     },

@@ -4,12 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { fixPath } from "./fixPath";
+import { createLogger } from "./logger";
 import { createServer } from "./wsServer";
 
 fixPath();
 
 const DEFAULT_PORT = 3773;
 const cwd = process.cwd();
+const logger = createLogger("server");
 
 async function findAvailablePort(preferred: number): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -65,11 +67,12 @@ async function main() {
   const staticDir = devUrl ? undefined : resolveStaticDir();
 
   if (!devUrl && !staticDir) {
-    console.warn(
-      "⚠ No built renderer found and no VITE_DEV_SERVER_URL set. The web UI will not be available.",
-    );
-    console.warn(
-      "  Run `bun run --cwd apps/renderer build` or set VITE_DEV_SERVER_URL for dev mode.",
+    logger.warn(
+      "renderer bundle missing and no VITE_DEV_SERVER_URL; web UI unavailable",
+      {
+        hint:
+          "Run `bun run --cwd apps/renderer build` or set VITE_DEV_SERVER_URL for dev mode.",
+      },
     );
   }
 
@@ -77,8 +80,7 @@ async function main() {
   await server.start();
 
   const url = `http://localhost:${port}`;
-  console.log(`\n  ✦ CodeThing running at ${url}`);
-  console.log(`  ✦ Project: ${cwd}\n`);
+  logger.info("CodeThing running", { url, cwd });
 
   // Open browser (dynamic import because `open` is ESM-only)
   try {
@@ -86,12 +88,14 @@ async function main() {
     const target = devUrl ?? url;
     await open.default(target);
   } catch {
-    console.log(`  Open ${devUrl ?? url} in your browser to get started.\n`);
+    logger.info("browser auto-open unavailable", {
+      hint: `Open ${devUrl ?? url} in your browser.`,
+    });
   }
 
   // Graceful shutdown
   const shutdown = () => {
-    console.log("\n  Shutting down...\n");
+    logger.info("shutting down");
     server.stop();
     process.exit(0);
   };
@@ -101,6 +105,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Failed to start CodeThing:", err);
+  logger.error("failed to start CodeThing", { error: err });
   process.exit(1);
 });

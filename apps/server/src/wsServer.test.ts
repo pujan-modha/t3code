@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { createServer } from "./wsServer";
 import WebSocket from "ws";
 
@@ -77,6 +77,7 @@ describe("WebSocket Server", () => {
     connections.length = 0;
     server?.stop();
     server = null;
+    vi.restoreAllMocks();
   });
 
   it("sends welcome message on connect", async () => {
@@ -97,6 +98,37 @@ describe("WebSocket Server", () => {
       cwd: "/test/project",
       projectName: "project",
     });
+  });
+
+  it("logs outbound websocket push events in dev mode", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {
+      // Keep test output clean while verifying websocket logs.
+    });
+
+    server = createServer({
+      port: 0,
+      cwd: "/test/project",
+      devUrl: "http://localhost:5173",
+    });
+    await server.start();
+    const addr = server.httpServer.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+    expect(port).toBeGreaterThan(0);
+
+    const ws = await connectWs(port);
+    connections.push(ws);
+    await waitForMessage(ws);
+
+    expect(
+      logSpy.mock.calls.some(([message]) => {
+        if (typeof message !== "string") return false;
+        return (
+          message.includes("[ws]") &&
+          message.includes("outgoing push") &&
+          message.includes(`channel="${WS_CHANNELS.serverWelcome}"`)
+        );
+      }),
+    ).toBe(true);
   });
 
   it("responds to server.getConfig", async () => {

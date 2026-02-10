@@ -14,6 +14,7 @@ import {
 } from "@acme/contracts";
 import { WebSocketServer, type WebSocket } from "ws";
 
+import { createLogger } from "./logger";
 import { ProviderManager } from "./providerManager";
 
 const MIME_TYPES: Record<string, string> = {
@@ -36,12 +37,35 @@ export interface ServerOptions {
   cwd: string;
   staticDir?: string | undefined;
   devUrl?: string | undefined;
+  logWebSocketEvents?: boolean | undefined;
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
 }
 
 export function createServer(options: ServerOptions) {
-  const { port, cwd, staticDir, devUrl } = options;
+  const { port, cwd, staticDir, devUrl, logWebSocketEvents: explicitLogWsEvents } = options;
   const providerManager = new ProviderManager();
   const clients = new Set<WebSocket>();
+  const logger = createLogger("ws");
+  const logWebSocketEvents =
+    explicitLogWsEvents ??
+    parseBooleanEnv(process.env.CODETHING_LOG_WS_EVENTS) ??
+    Boolean(devUrl);
+
+  function logOutgoingPush(push: WsPush, recipients: number) {
+    if (!logWebSocketEvents) return;
+    logger.event("outgoing push", {
+      channel: push.channel,
+      recipients,
+      payload: push.data,
+    });
+  }
 
   // Forward provider events to all connected WebSocket clients
   providerManager.on("event", (event) => {
@@ -51,11 +75,14 @@ export function createServer(options: ServerOptions) {
       data: event,
     };
     const message = JSON.stringify(push);
+    let recipients = 0;
     for (const client of clients) {
       if (client.readyState === client.OPEN) {
         client.send(message);
+        recipients += 1;
       }
     }
+    logOutgoingPush(push, recipients);
   });
 
   // HTTP server — serves static files or redirects to Vite dev server
@@ -129,6 +156,7 @@ export function createServer(options: ServerOptions) {
       channel: WS_CHANNELS.serverWelcome,
       data: { cwd, projectName },
     };
+    logOutgoingPush(welcome, 1);
     ws.send(JSON.stringify(welcome));
 
     ws.on("message", (raw) => {
