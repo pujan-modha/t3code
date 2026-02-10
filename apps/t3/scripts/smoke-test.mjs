@@ -875,6 +875,18 @@ async function main() {
         "Smoke test failed: expected no content-range on ranged If-Modified-Since response.",
       );
     }
+    const staleModifiedSince = new Date(parsedLastModifiedMs - 1_000).toUTCString();
+    const staleRangedModifiedSinceAsset = await fetch(assetUrl, {
+      headers: {
+        Range: `bytes=0-${rangeEnd}`,
+        "If-Modified-Since": staleModifiedSince,
+      },
+    });
+    if (staleRangedModifiedSinceAsset.status !== 206) {
+      throw new Error(
+        `Smoke test failed: expected stale ranged If-Modified-Since status 206, received ${staleRangedModifiedSinceAsset.status}.`,
+      );
+    }
     const ifRangeMismatchAsset = await fetch(assetUrl, {
       headers: {
         Range: `bytes=0-${rangeEnd}`,
