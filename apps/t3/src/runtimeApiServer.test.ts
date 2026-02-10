@@ -1611,6 +1611,37 @@ describe("runtimeApiServer", () => {
     client.socket.close();
   });
 
+  it("returns launch-cwd-relative errors when terminal cwd is missing", async () => {
+    const launchCwd = mkdtempSync(path.join(os.tmpdir(), "t3-terminal-missing-relative-"));
+    const server = await startRuntimeApiServer({
+      port: 0,
+      launchCwd,
+    });
+    servers.push(server);
+
+    const client = await connectClient(server.wsUrl);
+    await client.nextMessage();
+
+    const response = await sendRequest(
+      client.socket,
+      client.nextMessage,
+      "terminal-missing-relative-1",
+      "terminal.run",
+      {
+        command: "pwd",
+        cwd: "missing-subdir",
+      },
+    );
+    expect(response.ok).toBe(false);
+    if (response.ok) {
+      throw new Error("Expected relative missing terminal cwd response to fail.");
+    }
+    expect(response.error?.code).toBe("request_failed");
+    expect(response.error?.message).toContain(path.join(launchCwd, "missing-subdir"));
+
+    client.socket.close();
+  });
+
   it("returns structured errors when terminal cwd is not a directory", async () => {
     const server = await startRuntimeApiServer({
       port: 0,
