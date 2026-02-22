@@ -127,7 +127,6 @@ function normalizeRunningTerminalIds(
     .filter((id) => id.length > 0 && validTerminalIdSet.has(id));
 }
 
-
 function normalizeTerminalGroupIds(terminalIds: string[]): string[] {
   return [...new Set(terminalIds.map((id) => id.trim()).filter((id) => id.length > 0))];
 }
@@ -297,11 +296,26 @@ function closeThreadTerminal(thread: Thread, terminalId: string): Thread {
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case "SET_SERVER_STATE":
+    case "SET_SERVER_STATE": {
+      const previousThreadById = new Map(
+        state.threads.map((thread) => [thread.id, thread] as const),
+      );
       return {
         ...action.state,
-        threads: action.state.threads.map((thread) => normalizeThreadTerminals(thread)),
+        threads: action.state.threads.map((thread) => {
+          const prev = previousThreadById.get(thread.id);
+          if (!prev) return normalizeThreadTerminals(thread);
+          return normalizeThreadTerminals({
+            ...thread,
+            terminalOpen: prev.terminalOpen,
+            terminalHeight: prev.terminalHeight,
+            activeTerminalId: prev.activeTerminalId,
+            terminalGroups: prev.terminalGroups,
+            activeTerminalGroupId: prev.activeTerminalGroupId,
+          });
+        }),
       };
+    }
 
     case "ADD_PROJECT":
       if (state.projects.some((project) => project.cwd === action.project.cwd)) {
@@ -447,10 +461,7 @@ export function reducer(state: AppState, action: Action): AppState {
         threads: updateThread(state.threads, action.threadId, (thread) => {
           const normalizedThread = normalizeThreadTerminals(thread);
           const isNewTerminal = !normalizedThread.terminalIds.includes(action.terminalId);
-          if (
-            isNewTerminal &&
-            normalizedThread.terminalIds.length >= MAX_THREAD_TERMINAL_COUNT
-          ) {
+          if (isNewTerminal && normalizedThread.terminalIds.length >= MAX_THREAD_TERMINAL_COUNT) {
             return normalizedThread;
           }
           const terminalIds = normalizedThread.terminalIds.includes(action.terminalId)
@@ -520,10 +531,7 @@ export function reducer(state: AppState, action: Action): AppState {
         threads: updateThread(state.threads, action.threadId, (thread) => {
           const normalizedThread = normalizeThreadTerminals(thread);
           const isNewTerminal = !normalizedThread.terminalIds.includes(action.terminalId);
-          if (
-            isNewTerminal &&
-            normalizedThread.terminalIds.length >= MAX_THREAD_TERMINAL_COUNT
-          ) {
+          if (isNewTerminal && normalizedThread.terminalIds.length >= MAX_THREAD_TERMINAL_COUNT) {
             return normalizedThread;
           }
           const terminalIds = normalizedThread.terminalIds.includes(action.terminalId)

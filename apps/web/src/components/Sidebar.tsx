@@ -379,22 +379,18 @@ export default function Sidebar() {
       );
       if (!confirmed) return;
 
-      if (isElectron) {
-        try {
-          await api.projects.remove({ id: projectId });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Unknown error deleting project.";
-          console.error("Failed to remove project", { projectId, error });
-          toastManager.add({
-            type: "error",
-            title: `Failed to delete "${project.name}"`,
-            description: message,
-          });
-          return;
-        }
+      try {
+        await api.projects.remove({ id: projectId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error deleting project.";
+        console.error("Failed to remove project", { projectId, error });
+        toastManager.add({
+          type: "error",
+          title: `Failed to delete "${project.name}"`,
+          description: message,
+        });
+        return;
       }
-
     },
     [api, dispatch, state.projects, state.threads],
   );

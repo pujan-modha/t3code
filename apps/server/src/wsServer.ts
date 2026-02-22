@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import type { Duplex } from "node:stream";
 
 import {
+  DEFAULT_MODEL,
   EDITORS,
   WS_CHANNELS,
   WS_METHODS,
@@ -304,7 +305,8 @@ export function createServer(options: ServerOptions) {
     switch (request.method) {
       case WS_METHODS.providersStartSession: {
         const session = await providerManager.startSession(request.params as never);
-        const uiThreadId = typeof paramsObj.uiThreadId === "string" ? paramsObj.uiThreadId : undefined;
+        const uiThreadId =
+          typeof paramsObj.uiThreadId === "string" ? paramsObj.uiThreadId : undefined;
         if (uiThreadId) {
           await coreRuntime.bindProviderSession(uiThreadId, session);
         }
@@ -313,8 +315,11 @@ export function createServer(options: ServerOptions) {
 
       case WS_METHODS.providersSendTurn: {
         const sessionId = typeof paramsObj.sessionId === "string" ? paramsObj.sessionId : undefined;
-        const uiThreadId = typeof paramsObj.uiThreadId === "string" ? paramsObj.uiThreadId : undefined;
-        const targetThread = uiThreadId ? state.threads.find((thread) => thread.id === uiThreadId) : findThreadBySessionId(sessionId);
+        const uiThreadId =
+          typeof paramsObj.uiThreadId === "string" ? paramsObj.uiThreadId : undefined;
+        const targetThread = uiThreadId
+          ? state.threads.find((thread) => thread.id === uiThreadId)
+          : findThreadBySessionId(sessionId);
         const inputText = typeof paramsObj.input === "string" ? paramsObj.input : undefined;
         if (targetThread && inputText && inputText.trim().length > 0) {
           await coreRuntime.dispatch({
@@ -363,52 +368,49 @@ export function createServer(options: ServerOptions) {
       case WS_METHODS.projectsList:
         return projectRegistry.list();
 
-      case WS_METHODS.projectsAdd:
-        {
-          const result = projectRegistry.add(request.params as never);
+      case WS_METHODS.projectsAdd: {
+        const result = projectRegistry.add(request.params as never);
+        await coreRuntime.dispatch({
+          id: crypto.randomUUID(),
+          type: "project.add",
+          issuedAt: requestNow,
+          payload: {
+            id: result.project.id,
+            name: result.project.name,
+            cwd: result.project.cwd,
+            model: DEFAULT_MODEL,
+            scripts: result.project.scripts,
+          },
+        });
+        return result;
+      }
+
+      case WS_METHODS.projectsRemove: {
+        const projectId = typeof paramsObj.id === "string" ? paramsObj.id : undefined;
+        if (projectId) {
           await coreRuntime.dispatch({
             id: crypto.randomUUID(),
-            type: "project.add",
+            type: "project.remove",
             issuedAt: requestNow,
-            payload: {
-              id: result.project.id,
-              name: result.project.name,
-              cwd: result.project.cwd,
-              model: "gpt-5-codex",
-              scripts: result.project.scripts,
-            },
+            payload: { id: projectId },
           });
-          return result;
         }
-
-      case WS_METHODS.projectsRemove:
-        {
-          const projectId = typeof paramsObj.id === "string" ? paramsObj.id : undefined;
-          if (projectId) {
-            await coreRuntime.dispatch({
-              id: crypto.randomUUID(),
-              type: "project.remove",
-              issuedAt: requestNow,
-              payload: { id: projectId },
-            });
-          }
         projectRegistry.remove(request.params as never);
         return undefined;
-        }
+      }
 
       case WS_METHODS.projectsSearchEntries:
         return searchWorkspaceEntries(request.params as never);
-      case WS_METHODS.projectsUpdateScripts:
-        {
-          const result = projectRegistry.updateScripts(request.params as never);
-          await coreRuntime.dispatch({
-            id: crypto.randomUUID(),
-            type: "project.updateScripts",
-            issuedAt: requestNow,
-            payload: { id: result.project.id, scripts: result.project.scripts },
-          });
-          return result;
-        }
+      case WS_METHODS.projectsUpdateScripts: {
+        const result = projectRegistry.updateScripts(request.params as never);
+        await coreRuntime.dispatch({
+          id: crypto.randomUUID(),
+          type: "project.updateScripts",
+          issuedAt: requestNow,
+          payload: { id: result.project.id, scripts: result.project.scripts },
+        });
+        return result;
+      }
 
       case WS_METHODS.shellOpenInEditor: {
         const params = request.params as {

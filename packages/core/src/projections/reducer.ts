@@ -1,5 +1,11 @@
 import type { DomainEventEnvelope } from "../domain/events";
-import type { AppViewState, ChatMessage, ProviderEvent, ProviderSessionView, ThreadView } from "../domain/models";
+import type {
+  AppViewState,
+  ChatMessage,
+  ProviderEvent,
+  ProviderSessionView,
+  ThreadView,
+} from "../domain/models";
 import { emptyAppViewState } from "../domain/models";
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -27,7 +33,11 @@ function evolveSession(previous: ProviderSessionView, event: ProviderEvent): Pro
   const payload = asObject(event.payload);
   if (event.method === "thread/started") {
     const thread = asObject(payload?.thread);
-    return { ...previous, threadId: asString(thread?.id) ?? event.threadId ?? previous.threadId, updatedAt: event.createdAt };
+    return {
+      ...previous,
+      threadId: asString(thread?.id) ?? event.threadId ?? previous.threadId,
+      updatedAt: event.createdAt,
+    };
   }
   if (event.method === "turn/started") {
     const turn = asObject(payload?.turn);
@@ -70,7 +80,10 @@ function evolveSession(previous: ProviderSessionView, event: ProviderEvent): Pro
   return { ...previous, updatedAt: event.createdAt };
 }
 
-function applyEventToMessages(previous: ReadonlyArray<ChatMessage>, event: ProviderEvent): ChatMessage[] {
+function applyEventToMessages(
+  previous: ReadonlyArray<ChatMessage>,
+  event: ProviderEvent,
+): ChatMessage[] {
   const payload = asObject(event.payload);
   if (event.method === "item/started") {
     const item = asObject(payload?.item);
@@ -80,7 +93,13 @@ function applyEventToMessages(previous: ReadonlyArray<ChatMessage>, event: Provi
     const seedText = asString(item?.text) ?? "";
     return [
       ...previous.filter((entry) => entry.id !== itemId),
-      { id: itemId, role: "assistant", text: seedText, createdAt: event.createdAt, streaming: true },
+      {
+        id: itemId,
+        role: "assistant",
+        text: seedText,
+        createdAt: event.createdAt,
+        streaming: true,
+      },
     ];
   }
   if (event.method === "item/agentMessage/delta") {
@@ -89,7 +108,10 @@ function applyEventToMessages(previous: ReadonlyArray<ChatMessage>, event: Provi
     if (!itemId || !delta) return [...previous];
     const idx = previous.findIndex((entry) => entry.id === itemId);
     if (idx < 0) {
-      return [...previous, { id: itemId, role: "assistant", text: delta, createdAt: event.createdAt, streaming: true }];
+      return [
+        ...previous,
+        { id: itemId, role: "assistant", text: delta, createdAt: event.createdAt, streaming: true },
+      ];
     }
     const next = [...previous];
     const current = next[idx];
@@ -105,7 +127,16 @@ function applyEventToMessages(previous: ReadonlyArray<ChatMessage>, event: Provi
     const fullText = asString(item?.text);
     const idx = previous.findIndex((entry) => entry.id === itemId);
     if (idx < 0) {
-      return [...previous, { id: itemId, role: "assistant", text: fullText ?? "", createdAt: event.createdAt, streaming: false }];
+      return [
+        ...previous,
+        {
+          id: itemId,
+          role: "assistant",
+          text: fullText ?? "",
+          createdAt: event.createdAt,
+          streaming: false,
+        },
+      ];
     }
     const next = [...previous];
     const current = next[idx];
@@ -156,7 +187,8 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
   switch (event.type) {
     case "app.bootstrapped": {
       const payload = event.payload as { cwd: string; projectName: string };
-      if (state.projects.length > 0) return { ...state, threadsHydrated: true, lastPosition: event.position };
+      if (state.projects.length > 0)
+        return { ...state, threadsHydrated: true, lastPosition: event.position };
       return {
         ...state,
         projects: [
@@ -164,7 +196,7 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
             id: "bootstrap-project",
             name: payload.projectName,
             cwd: payload.cwd,
-            model: "gpt-5-codex",
+            model: "gpt-5.3-codex",
             expanded: true,
             scripts: [],
           },
@@ -181,7 +213,9 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
         model: string;
         scripts: Array<{ id: string; name: string; command: string; keybinding?: string }>;
       };
-      if (state.projects.some((project) => project.id === payload.id || project.cwd === payload.cwd)) {
+      if (
+        state.projects.some((project) => project.id === payload.id || project.cwd === payload.cwd)
+      ) {
         return { ...state, lastPosition: event.position };
       }
       return {
@@ -225,11 +259,19 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
       if (state.threads.some((thread) => thread.id === payload.id)) {
         return { ...state, lastPosition: event.position };
       }
-      return { ...state, threads: [...state.threads, defaultThread(payload)], lastPosition: event.position };
+      return {
+        ...state,
+        threads: [...state.threads, defaultThread(payload)],
+        lastPosition: event.position,
+      };
     }
     case "thread.deleted": {
       const payload = event.payload as { id: string };
-      return { ...state, threads: state.threads.filter((thread) => thread.id !== payload.id), lastPosition: event.position };
+      return {
+        ...state,
+        threads: state.threads.filter((thread) => thread.id !== payload.id),
+        lastPosition: event.position,
+      };
     }
     case "thread.userMessageAdded": {
       const payload = event.payload as {
@@ -293,11 +335,22 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
         threads: state.threads.map((thread) => {
           if (thread.id !== payload.threadId) return thread;
           const nextEvents = [payload.event, ...thread.events];
-          const nextSession = thread.session ? evolveSession(thread.session, payload.event) : thread.session;
+          const nextSession = thread.session
+            ? evolveSession(thread.session, payload.event)
+            : thread.session;
           const nextMessages = applyEventToMessages(thread.messages, payload.event);
-          const nextTurnId = payload.event.method === "turn/started" ? eventTurnId(payload.event) ?? thread.latestTurnId : thread.latestTurnId;
-          const nextTurnStartedAt = payload.event.method === "turn/started" ? payload.event.createdAt : thread.latestTurnStartedAt;
-          const nextTurnCompletedAt = payload.event.method === "turn/completed" ? payload.event.createdAt : thread.latestTurnCompletedAt;
+          const nextTurnId =
+            payload.event.method === "turn/started"
+              ? (eventTurnId(payload.event) ?? thread.latestTurnId)
+              : thread.latestTurnId;
+          const nextTurnStartedAt =
+            payload.event.method === "turn/started"
+              ? payload.event.createdAt
+              : thread.latestTurnStartedAt;
+          const nextTurnCompletedAt =
+            payload.event.method === "turn/completed"
+              ? payload.event.createdAt
+              : thread.latestTurnCompletedAt;
           const nextTurnDuration =
             payload.event.method === "turn/completed" && thread.latestTurnStartedAt
               ? durationMs(thread.latestTurnStartedAt, payload.event.createdAt)
@@ -307,7 +360,10 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
             events: nextEvents,
             messages: nextMessages,
             session: nextSession,
-            error: payload.event.kind === "error" && payload.event.message ? payload.event.message : thread.error,
+            error:
+              payload.event.kind === "error" && payload.event.message
+                ? payload.event.message
+                : thread.error,
             latestTurnId: nextTurnId,
             latestTurnStartedAt: nextTurnStartedAt,
             latestTurnCompletedAt: nextTurnCompletedAt,
@@ -318,7 +374,11 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
       };
     }
     case "thread.branchSet": {
-      const payload = event.payload as { threadId: string; branch: string | null; worktreePath: string | null };
+      const payload = event.payload as {
+        threadId: string;
+        branch: string | null;
+        worktreePath: string | null;
+      };
       return {
         ...state,
         threads: state.threads.map((thread) =>
@@ -365,6 +425,12 @@ export function applyDomainEvent(state: AppViewState, event: DomainEventEnvelope
   }
 }
 
-export function reduceEvents(events: ReadonlyArray<DomainEventEnvelope>, seed?: AppViewState): AppViewState {
-  return events.reduce((state, event) => applyDomainEvent(state, event), seed ?? emptyAppViewState());
+export function reduceEvents(
+  events: ReadonlyArray<DomainEventEnvelope>,
+  seed?: AppViewState,
+): AppViewState {
+  return events.reduce(
+    (state, event) => applyDomainEvent(state, event),
+    seed ?? emptyAppViewState(),
+  );
 }

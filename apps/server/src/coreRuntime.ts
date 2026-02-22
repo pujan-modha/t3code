@@ -1,11 +1,15 @@
 import path from "node:path";
 import crypto from "node:crypto";
-import type { ProviderEvent, ProviderSession, TerminalEvent } from "@t3tools/contracts";
-import { EffectFanout, OrchestrationEngine, QueueProjector, type AppViewState } from "@t3tools/core";
+import type { ProviderEvent, ProviderSession } from "@t3tools/contracts";
+import {
+  EffectFanout,
+  OrchestrationEngine,
+  QueueProjector,
+  type AppViewState,
+} from "@t3tools/core";
 import { createSqliteStores } from "@t3tools/infra-sqlite";
 
 import type { ProviderManager } from "./providerManager";
-import type { TerminalManager } from "./terminalManager";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -21,7 +25,11 @@ export class CoreRuntime {
     const dbPath = path.join(dbDir, "event-store.sqlite");
     this.stores = createSqliteStores(dbPath);
     this.projector = new QueueProjector(this.stores.projectionStore, this.fanout);
-    this.engine = new OrchestrationEngine(this.stores.eventStore, this.stores.projectionStore, this.projector);
+    this.engine = new OrchestrationEngine(
+      this.stores.eventStore,
+      this.stores.projectionStore,
+      this.projector,
+    );
   }
 
   async start(cwd: string, projectName: string): Promise<void> {
@@ -54,22 +62,6 @@ export class CoreRuntime {
   bindProviderEvents(providerManager: ProviderManager): void {
     providerManager.on("event", (event: ProviderEvent) => {
       void this.ingestProviderEvent(event);
-    });
-  }
-
-  bindTerminalEvents(terminalManager: TerminalManager): void {
-    terminalManager.on("event", (event: TerminalEvent) => {
-      if (event.type !== "activity" && event.type !== "error" && event.type !== "exited") return;
-      void this.dispatch({
-        id: crypto.randomUUID(),
-        type: "thread.setTerminalActivity",
-        issuedAt: event.createdAt,
-        payload: {
-          threadId: event.threadId,
-          terminalId: event.terminalId,
-          running: event.type === "activity" ? event.hasRunningSubprocess : false,
-        },
-      });
     });
   }
 

@@ -4,14 +4,16 @@ import {
   type ErrorComponentProps,
   useParams,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { QueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
 
 import { APP_DISPLAY_NAME } from "../branding";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider } from "../components/ui/toast";
 import { isElectron } from "../env";
 import { useNativeApi } from "../hooks/useNativeApi";
+import { invalidateGitQueries } from "../lib/gitReactQuery";
+import { providerQueryKeys } from "../lib/providerReactQuery";
 import { type AppState, useStore } from "../store";
 import { onServerStateUpdate, onServerWelcome } from "../wsNativeApi";
 
@@ -123,10 +125,12 @@ function errorDetails(error: unknown): string {
 function EventRouter() {
   const api = useNativeApi();
   const { dispatch } = useStore();
+  const queryClient = useQueryClient();
   const activeThreadId = useParams({
     strict: false,
     select: (params) => params.threadId,
   });
+  const prevTurnCompletionsRef = useRef<Map<string, string | undefined>>(new Map());
 
   useEffect(() => {
     if (!api) return;
@@ -142,9 +146,28 @@ function EventRouter() {
 
   useEffect(() => {
     return onServerStateUpdate((snapshot) => {
-      dispatch({ type: "SET_SERVER_STATE", state: snapshot as AppState });
+      const serverState = snapshot as AppState;
+      dispatch({ type: "SET_SERVER_STATE", state: serverState });
+
+      let hasNewTurnCompletion = false;
+      for (const thread of serverState.threads) {
+        const prev = prevTurnCompletionsRef.current.get(thread.id);
+        if (thread.latestTurnCompletedAt && thread.latestTurnCompletedAt !== prev) {
+          hasNewTurnCompletion = true;
+        }
+      }
+      const nextMap = new Map<string, string | undefined>();
+      for (const thread of serverState.threads) {
+        nextMap.set(thread.id, thread.latestTurnCompletedAt);
+      }
+      prevTurnCompletionsRef.current = nextMap;
+
+      if (hasNewTurnCompletion) {
+        void invalidateGitQueries(queryClient);
+        void queryClient.invalidateQueries({ queryKey: providerQueryKeys.all });
+      }
     });
-  }, [dispatch]);
+  }, [dispatch, queryClient]);
 
   useEffect(() => {
     if (!activeThreadId) return;
