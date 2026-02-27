@@ -142,8 +142,12 @@ export const OrchestrationSession = Schema.Struct({
   providerName: Schema.NullOr(TrimmedNonEmptyString),
   providerSessionId: Schema.NullOr(ProviderSessionId),
   providerThreadId: Schema.NullOr(ProviderThreadId),
-  approvalPolicy: ProviderApprovalPolicy,
-  sandboxMode: ProviderSandboxMode,
+  approvalPolicy: Schema.optional(ProviderApprovalPolicy).pipe(
+    Schema.withDecodingDefault(() => "on-request" as ProviderApprovalPolicy),
+  ),
+  sandboxMode: Schema.optional(ProviderSandboxMode).pipe(
+    Schema.withDecodingDefault(() => "workspace-write" as ProviderSandboxMode),
+  ),
   activeTurnId: Schema.NullOr(TurnId),
   lastError: Schema.NullOr(TrimmedNonEmptyString),
   updatedAt: IsoDateTime,
@@ -500,8 +504,12 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
   model: Schema.optional(TrimmedNonEmptyString),
   effort: Schema.optional(TrimmedNonEmptyString),
   assistantDeliveryMode: Schema.optional(AssistantDeliveryMode),
-  approvalPolicy: ProviderApprovalPolicy,
-  sandboxMode: ProviderSandboxMode,
+  approvalPolicy: Schema.optional(ProviderApprovalPolicy).pipe(
+    Schema.withDecodingDefault(() => "on-request" as ProviderApprovalPolicy),
+  ),
+  sandboxMode: Schema.optional(ProviderSandboxMode).pipe(
+    Schema.withDecodingDefault(() => "workspace-write" as ProviderSandboxMode),
+  ),
   createdAt: IsoDateTime,
 });
 

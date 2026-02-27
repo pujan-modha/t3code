@@ -64,7 +64,7 @@ const serverCommandId = (tag: string): CommandId =>
 
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
-const DEFAULT_APPROVAL_POLICY: ProviderApprovalPolicy = "never";
+const DEFAULT_APPROVAL_POLICY: ProviderApprovalPolicy = "on-request";
 const DEFAULT_SANDBOX_MODE: ProviderSandboxMode = "workspace-write";
 
 const make = Effect.gen(function* () {
@@ -279,8 +279,8 @@ const make = Effect.gen(function* () {
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.model !== undefined ? { model: event.payload.model } : {}),
       ...(event.payload.effort !== undefined ? { effort: event.payload.effort } : {}),
-      approvalPolicy: event.payload.approvalPolicy,
-      sandboxMode: event.payload.sandboxMode,
+      approvalPolicy: event.payload.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,
+      sandboxMode: event.payload.sandboxMode ?? DEFAULT_SANDBOX_MODE,
       createdAt: event.payload.createdAt,
     });
   });
