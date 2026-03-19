@@ -11,6 +11,17 @@ import type { Effect } from "effect";
 
 import type { GitCommandError } from "../Errors.ts";
 
+export interface ExecuteGitProgress {
+  readonly onStdoutLine?: (line: string) => Effect.Effect<void, never>;
+  readonly onStderrLine?: (line: string) => Effect.Effect<void, never>;
+  readonly onHookStarted?: (hookName: string) => Effect.Effect<void, never>;
+  readonly onHookFinished?: (input: {
+    hookName: string;
+    exitCode: number | null;
+    durationMs: number | null;
+  }) => Effect.Effect<void, never>;
+}
+
 export interface ExecuteGitInput {
   readonly operation: string;
   readonly cwd: string;
@@ -19,6 +30,7 @@ export interface ExecuteGitInput {
   readonly allowNonZeroExit?: boolean;
   readonly timeoutMs?: number;
   readonly maxOutputBytes?: number;
+  readonly progress?: ExecuteGitProgress;
 }
 
 export interface ExecuteGitResult {

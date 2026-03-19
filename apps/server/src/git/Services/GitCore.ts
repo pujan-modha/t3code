@@ -33,6 +33,24 @@ export interface GitPreparedCommitContext {
   stagedPatch: string;
 }
 
+export interface GitCommitProgress {
+  readonly onOutputLine?: (input: {
+    stream: "stdout" | "stderr";
+    text: string;
+  }) => Effect.Effect<void, never>;
+  readonly onHookStarted?: (hookName: string) => Effect.Effect<void, never>;
+  readonly onHookFinished?: (input: {
+    hookName: string;
+    exitCode: number | null;
+    durationMs: number | null;
+  }) => Effect.Effect<void, never>;
+}
+
+export interface GitCommitOptions {
+  readonly timeoutMs?: number;
+  readonly progress?: GitCommitProgress;
+}
+
 export interface GitPushResult {
   status: "pushed" | "skipped_up_to_date";
   branch: string;
@@ -111,6 +129,7 @@ export interface GitCoreShape {
     cwd: string,
     subject: string,
     body: string,
+    options?: GitCommitOptions,
   ) => Effect.Effect<{ commitSha: string }, GitCommandError>;
 
   /**

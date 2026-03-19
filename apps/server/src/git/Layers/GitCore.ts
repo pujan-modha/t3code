@@ -2,7 +2,8 @@ import { Cache, Data, Duration, Effect, Exit, FileSystem, Layer, Path } from "ef
 
 import { GitCommandError } from "../Errors.ts";
 import { GitService } from "../Services/GitService.ts";
-import { GitCore, type GitCoreShape } from "../Services/GitCore.ts";
+import type { ExecuteGitProgress } from "../Services/GitService.ts";
+import { GitCore, type GitCommitOptions, type GitCoreShape } from "../Services/GitCore.ts";
 
 const STATUS_UPSTREAM_REFRESH_INTERVAL = Duration.seconds(15);
 const STATUS_UPSTREAM_REFRESH_TIMEOUT = Duration.seconds(5);
@@ -20,6 +21,7 @@ interface ExecuteGitOptions {
   timeoutMs?: number | undefined;
   allowNonZeroExit?: boolean | undefined;
   fallbackErrorMessage?: string | undefined;
+  progress?: ExecuteGitProgress | undefined;
 }
 
 function parseBranchAb(value: string): { ahead: number; behind: number } {
@@ -235,6 +237,7 @@ const makeGitCore = Effect.gen(function* () {
         args,
         allowNonZeroExit: true,
         ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+        ...(options.progress ? { progress: options.progress } : {}),
       })
       .pipe(
         Effect.flatMap((result) => {
@@ -804,14 +807,37 @@ const makeGitCore = Effect.gen(function* () {
       };
     });
 
-  const commit: GitCoreShape["commit"] = (cwd, subject, body) =>
+  const commit: GitCoreShape["commit"] = (cwd, subject, body, options?: GitCommitOptions) =>
     Effect.gen(function* () {
       const args = ["commit", "-m", subject];
       const trimmedBody = body.trim();
       if (trimmedBody.length > 0) {
         args.push("-m", trimmedBody);
       }
-      yield* runGit("GitCore.commit.commit", cwd, args);
+      const progress = options?.progress
+        ? {
+            ...(options.progress.onOutputLine
+              ? {
+                  onStdoutLine: (line: string) =>
+                    options.progress?.onOutputLine?.({ stream: "stdout", text: line }) ??
+                    Effect.void,
+                  onStderrLine: (line: string) =>
+                    options.progress?.onOutputLine?.({ stream: "stderr", text: line }) ??
+                    Effect.void,
+                }
+              : {}),
+            ...(options.progress.onHookStarted
+              ? { onHookStarted: options.progress.onHookStarted }
+              : {}),
+            ...(options.progress.onHookFinished
+              ? { onHookFinished: options.progress.onHookFinished }
+              : {}),
+          }
+        : null;
+      yield* executeGit("GitCore.commit.commit", cwd, args, {
+        ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+        ...(progress ? { progress } : {}),
+      }).pipe(Effect.asVoid);
       const commitSha = yield* runGitStdout("GitCore.commit.revParseHead", cwd, [
         "rev-parse",
         "HEAD",
