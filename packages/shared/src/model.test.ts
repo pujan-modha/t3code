@@ -138,6 +138,17 @@ describe("inferProviderForModel", () => {
   it("treats claude-prefixed custom slugs as claude", () => {
     expect(inferProviderForModel("claude-custom-internal")).toBe("claudeAgent");
   });
+
+  it("uses explicit fallback for unknown models", () => {
+    expect(inferProviderForModel("unknown-model", "claudeAgent")).toBe("claudeAgent");
+    expect(inferProviderForModel("unknown-model", "codex")).toBe("codex");
+    expect(inferProviderForModel("unknown-model")).toBe("codex"); // default fallback
+  });
+
+  it("treats null model as missing", () => {
+    expect(inferProviderForModel(null)).toBe("codex");
+    expect(inferProviderForModel(null, "claudeAgent")).toBe("claudeAgent");
+  });
 });
 
 describe("getDefaultReasoningEffort", () => {

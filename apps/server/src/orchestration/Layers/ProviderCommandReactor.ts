@@ -233,26 +233,39 @@ const make = Effect.gen(function* () {
     )
       ? thread.session.providerName
       : undefined;
-    const threadProvider: ProviderKind = currentProvider ?? inferProviderForModel(thread.model);
-    if (options?.provider !== undefined && options.provider !== threadProvider) {
+
+    // Determine the effective thread provider based on session state
+    // First turn (no session): trust explicit options.provider, then options.model, then fallback
+    // Subsequent turns: enforce binding — no provider switching allowed after session is established
+    const threadProvider: ProviderKind =
+      currentProvider ??
+      (options?.provider ?? null) ?? // explicit provider on first turn
+      (options?.model ? inferProviderForModel(options.model, "codex") : null) ?? // infer from model
+      "codex"; // ultimate fallback (should rarely hit)
+
+    // Only enforce binding when session already exists
+    if (currentProvider !== undefined && options?.provider !== undefined && options.provider !== currentProvider) {
       return yield* new ProviderAdapterRequestError({
-        provider: threadProvider,
+        provider: currentProvider,
         method: "thread.turn.start",
-        detail: `Thread '${threadId}' is bound to provider '${threadProvider}' and cannot switch to '${options.provider}'.`,
+        detail: `Thread '${threadId}' is bound to provider '${currentProvider}' and cannot switch to '${options.provider}'.`,
       });
     }
-    if (
-      options?.model !== undefined &&
-      inferProviderForModel(options.model, threadProvider) !== threadProvider
-    ) {
-      return yield* new ProviderAdapterRequestError({
-        provider: threadProvider,
-        method: "thread.turn.start",
-        detail: `Model '${options.model}' does not belong to provider '${threadProvider}' for thread '${threadId}'.`,
-      });
+
+    // Binding check for model vs provider mismatch only when session exists
+    if (currentProvider !== undefined && options?.model !== undefined) {
+      const modelProvider = inferProviderForModel(options.model, currentProvider);
+      if (modelProvider !== currentProvider) {
+        return yield* new ProviderAdapterRequestError({
+          provider: currentProvider,
+          method: "thread.turn.start",
+          detail: `Model '${options.model}' does not belong to provider '${currentProvider}' for thread '${threadId}'.`,
+        });
+      }
     }
-    const preferredProvider: ProviderKind = currentProvider ?? threadProvider;
-    const desiredModel = options?.model ?? thread.model;
+
+    const preferredProvider: ProviderKind = currentProvider ?? (options?.provider ?? threadProvider);
+    const desiredModel = options?.model ?? (thread.model ?? null) ?? undefined;
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: readModel.projects,
