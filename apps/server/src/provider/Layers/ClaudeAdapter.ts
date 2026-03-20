@@ -61,6 +61,7 @@ import {
   Queue,
   Random,
   Ref,
+  Schema,
   Stream,
 } from "effect";
 
@@ -79,22 +80,25 @@ import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogg
 
 const PROVIDER = "claudeAgent" as const;
 
+const SettingsJsonSchema = Schema.Struct({
+  env: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+});
+
 /**
  * Reads the `env` block from `~/.claude/settings.json` and returns it as a
  * plain object. This is needed because GUI applications on macOS don't inherit
  * shell environment variables, so the Claude binary would not receive API
  * credentials from settings.json when spawned programmatically.
  */
-function getClaudeEnvFromSettings(): Record<string, string> {
-  try {
+const getClaudeEnvFromSettings = Effect.try({
+  try: () => {
     const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
     const content = fs.readFileSync(settingsPath, "utf-8");
-    const parsed = JSON.parse(content) as { env?: Record<string, string> };
-    return parsed.env ?? {};
-  } catch {
-    return {};
-  }
-}
+    const decoded = Schema.decodeUnknownSync(SettingsJsonSchema)(content);
+    return decoded.env ?? {};
+  },
+  catch: () => ({} as Record<string, string>),
+});
 
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
 type ClaudeToolResultStreamKind = Extract<
@@ -2596,7 +2600,10 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
           ...(newSessionId ? { sessionId: newSessionId } : {}),
           includePartialMessages: true,
           canUseTool,
-          env: { ...process.env, ...getClaudeEnvFromSettings() },
+          env: (() => {
+            const result = Effect.runSync(Effect.result(getClaudeEnvFromSettings));
+            return result._tag === "Success" ? result.success : {};
+          })(),
           settingSources: ["user"],
           ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         };
