@@ -2575,18 +2575,7 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
           ...(newSessionId ? { sessionId: newSessionId } : {}),
           includePartialMessages: true,
           canUseTool,
-          env: {
-            ...process.env,
-            // For MiniMax and other third-party providers, pass the env vars from
-            // ~/.claude/settings.json if available in the server's environment.
-            // Only set if they have values to avoid overriding settings.json values.
-            ...(process.env.ANTHROPIC_AUTH_TOKEN
-              ? { ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN }
-              : {}),
-            ...(process.env.ANTHROPIC_BASE_URL
-              ? { ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL }
-              : {}),
-          },
+          env: process.env,
           ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         };
 
