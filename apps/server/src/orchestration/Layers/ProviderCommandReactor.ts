@@ -26,7 +26,7 @@ import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
-import { inferProviderForModel } from "@t3tools/shared/model";
+import { inferProviderForModel, isKnownModelSlug } from "@t3tools/shared/model";
 
 type ProviderIntentEvent = Extract<
   OrchestrationEvent,
@@ -265,7 +265,15 @@ const make = Effect.gen(function* () {
     }
 
     const preferredProvider: ProviderKind = currentProvider ?? (options?.provider ?? threadProvider);
-    const desiredModel = options?.model ?? (thread.model ?? null) ?? undefined;
+
+    // Only pass model to SDK if it's a known model for the provider.
+    // Unknown custom models (like claude-MiniMax-M2.7) should be left for the SDK
+    // to resolve via ANTHROPIC_MODEL env var.
+    const optionsModel = options?.model;
+    const desiredModel =
+      optionsModel && isKnownModelSlug(optionsModel, preferredProvider)
+        ? optionsModel
+        : (thread.model ?? null) ?? undefined;
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: readModel.projects,
