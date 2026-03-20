@@ -547,6 +547,19 @@ export const checkClaudeProviderStatus: Effect.Effect<
   }
 
   // Probe 2: `claude auth status` — is the user authenticated?
+  // Note: If ANTHROPIC_AUTH_TOKEN is set (e.g., for MiniMax), skip this check
+  // since the auth is via env var, not the standard claude auth mechanism
+  if (process.env.ANTHROPIC_AUTH_TOKEN) {
+    return {
+      provider: CLAUDE_AGENT_PROVIDER,
+      status: "ready",
+      available: true,
+      authStatus: "authenticated",
+      checkedAt,
+      message: "Authenticated via ANTHROPIC_AUTH_TOKEN env var.",
+    };
+  }
+
   const authProbe = yield* runClaudeCommand(["auth", "status"]).pipe(
     Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
     Effect.result,
