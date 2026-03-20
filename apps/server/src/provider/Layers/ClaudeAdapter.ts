@@ -17,6 +17,9 @@ import {
   type SDKResultMessage,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import {
   ApprovalRequestId,
   type CanonicalItemType,
@@ -75,6 +78,25 @@ import { ClaudeAdapter, type ClaudeAdapterShape } from "../Services/ClaudeAdapte
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = "claudeAgent" as const;
+
+/**
+ * Reads the `env` block from `~/.claude/settings.json` and returns it as a
+ * plain object. This is needed because GUI apps on macOS (like t3code) don't
+ * inherit shell environment variables, but the Claude binary reads settings.json
+ * when started interactively. By extracting these env vars and passing them to
+ * the SDK, we ensure the Claude binary uses the correct API credentials.
+ */
+function getClaudeEnvFromSettings(): Record<string, string> {
+  try {
+    const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+    const content = fs.readFileSync(settingsPath, "utf-8");
+    const parsed = JSON.parse(content) as { env?: Record<string, string> };
+    return parsed.env ?? {};
+  } catch {
+    return {};
+  }
+}
+
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
 type ClaudeToolResultStreamKind = Extract<
   RuntimeContentStreamKind,
@@ -2575,7 +2597,7 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
           ...(newSessionId ? { sessionId: newSessionId } : {}),
           includePartialMessages: true,
           canUseTool,
-          env: process.env,
+          env: { ...process.env, ...getClaudeEnvFromSettings() },
           ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         };
 
