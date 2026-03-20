@@ -244,6 +244,7 @@ const runCodexCommand = (args: ReadonlyArray<string>) =>
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const command = ChildProcess.make("codex", [...args], {
       shell: process.platform === "win32",
+      env: process.env as Record<string, string>,
     });
 
     const child = yield* spawner.spawn(command);
@@ -265,6 +266,7 @@ const runClaudeCommand = (args: ReadonlyArray<string>) =>
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const command = ChildProcess.make("claude", [...args], {
       shell: process.platform === "win32",
+      env: process.env as Record<string, string>,
     });
 
     const child = yield* spawner.spawn(command);
